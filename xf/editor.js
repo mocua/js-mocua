@@ -125,7 +125,7 @@
 				heightMin: heightLimits[0],
 				heightMax: heightLimits[1],
 				htmlAllowedTags: ['a', 'b', 'bdi', 'bdo', 'blockquote', 'br', 'cite', 'code', 'dfn', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'mark', 'ol', 'p', 'pre', 's', 'script', 'style', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'var', 'video', 'wbr'],
-				key: '5D5C4B4B3aG3C2A5A4C4E3E2D4F2G2tFOFSAGLUi1AVKd1SN==',
+				key: 'ZD3G4J3A8C9A5cD3F3H3H2G3A4D4B6D2E1vDIJ1QCYRWd1GPIb2a1E1==',
 				htmlAllowComments: false,
 				imageUpload: false,
 				imageCORSProxy: null,
@@ -452,7 +452,41 @@
 					content = $.trim(match[1]);
 				}
 
-				return XF.adjustHtmlForRte(content);
+				content = XF.adjustHtmlForRte(content);
+
+				var nodes = $.parseHTML(content),
+					removeJsAttributesFromNodeList = function(nodes)
+					{
+						var node, attrs, i, a;
+
+						for (i = 0; i < nodes.length; i++)
+						{
+							node = nodes[i];
+							if (node instanceof Element)
+							{
+								if (node.hasAttributes())
+								{
+									attrs = node.attributes;
+
+									for (a = attrs.length - 1; a >= 0; a--)
+									{
+										if (attrs[a].name.toLowerCase().substr(0, 2) == 'on')
+										{
+											node.removeAttribute(attrs[a].name);
+										}
+									}
+								}
+
+								removeJsAttributesFromNodeList(node.children);
+							}
+						}
+					};
+
+				removeJsAttributesFromNodeList(nodes);
+
+				content = $('<div />').html(nodes).html();
+
+				return content;
 			});
 
 			ed.events.on('paste.afterCleanup', function(content)
@@ -2029,7 +2063,15 @@
 			overlay.$container.on('overlay:shown', function()
 			{
 				var $codeMirror = $(this).find('.CodeMirror');
-				$codeMirror[0].CodeMirror.focus();
+
+				if ($codeMirror.length && $codeMirror[0].CodeMirror)
+				{
+					$codeMirror[0].CodeMirror.focus();
+				}
+				else
+				{
+					$(this).find('.js-codeEditor').focus();
+				}
 			});
 		},
 
@@ -2079,6 +2121,7 @@
 			if (!XF.editorStart.started)
 			{
 				XF.editorStart.setupLanguage();
+				XF.editorStart.registerOverrides();
 				XF.editorStart.registerCommands();
 				XF.editorStart.registerCustomCommands();
 				XF.editorStart.registerEditorDropdowns();
@@ -2108,6 +2151,24 @@
 			$.FE.LANGUAGE['xf'] = {
 				translation: lang,
 				direction: dir ? dir.toLowerCase() : 'ltr'
+			};
+		},
+
+		registerOverrides: function()
+		{
+			var helpersModule = $.FE.MODULES.helpers;
+			$.FE.MODULES.helpers = function(editor)
+			{
+				var helpers = helpersModule(editor),
+					sanitizeURL = helpers.sanitizeURL;
+
+				helpers.sanitizeURL = function(url)
+				{
+					var res = sanitizeURL(url);
+					return res.replace(/["']/g, '');
+				};
+
+				return helpers;
 			};
 		},
 
@@ -2350,7 +2411,7 @@
 					}
 				}
 
-				function loadVisibleImages($rowOrEvent)
+				function loadVisibleImages($rowOrEvent, assumeVisible)
 				{
 					var $row = $rowOrEvent;
 
@@ -2359,7 +2420,7 @@
 						$row = $($rowOrEvent.currentTarget);
 					}
 
-					if (!$row.is(':visible'))
+					if (!assumeVisible && !$row.is(':visible'))
 					{
 						return;
 					}
@@ -2529,7 +2590,7 @@
 						$recentBlock.xfFadeDown(XF.config.speed.fast);
 					}
 
-					loadVisibleImages($newList);
+					loadVisibleImages($newList, true);
 				}
 
 				function selectionSave()
